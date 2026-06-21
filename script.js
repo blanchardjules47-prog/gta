@@ -2,21 +2,21 @@
 // 1. INITIALISATION DE THREE.JS (VISUEL)
 // ==========================================
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111122); // Ambiance fin de journée / nuit urbaine
+scene.background = new THREE.Color(0x111122); // Ambiance nuit urbaine
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Lumières style néon / ville
+// Lumières de la ville
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
 scene.add(ambientLight);
 const dirLight = new THREE.DirectionalLight(0xffeedd, 0.8);
 dirLight.position.set(50, 100, 50);
 scene.add(dirLight);
 
-// Le sol (Asphalte de la ville)
+// Le sol (Asphalte)
 const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.8 }));
 floorMesh.rotation.x = -Math.PI / 2;
 scene.add(floorMesh);
@@ -35,7 +35,7 @@ floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
 world.addBody(floorBody);
 
 // ==========================================
-// 3. CRÉATION DU PERSONNAGE ARTISANAL ANIMÉ
+// 3. CRÉATION DU PERSONNAGE ANIMÉ
 // ==========================================
 const playerGroup = new THREE.Group();
 
@@ -45,21 +45,19 @@ const pantsMat = new THREE.MeshStandardMaterial({ color: 0x222222 });   // Panta
 
 // Torse
 const torso = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.3), clothesMat);
-torso.position.y = 0.85;
-playerGroup.add(torso);
+torso.position.y = 0.85; playerGroup.add(torso);
 
 // Tête
 const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), skinMat);
-head.position.y = 1.3;
-playerGroup.add(head);
+head.position.y = 1.3; playerGroup.add(head);
 
-// Bras Gauche et Droit
+// Bras
 const armGeo = new THREE.BoxGeometry(0.18, 0.6, 0.18);
 const leftArm = new THREE.Mesh(armGeo, clothesMat); leftArm.position.set(-0.4, 0.85, 0);
 const rightArm = new THREE.Mesh(armGeo, clothesMat); rightArm.position.set(0.4, 0.85, 0);
 playerGroup.add(leftArm, rightArm);
 
-// Jambes Gauche et Droite
+// Jambes
 const legGeo = new THREE.BoxGeometry(0.2, 0.6, 0.2);
 const leftLeg = new THREE.Mesh(legGeo, pantsMat); leftLeg.position.set(-0.18, 0.3, 0);
 const rightLeg = new THREE.Mesh(legGeo, pantsMat); rightLeg.position.set(0.18, 0.3, 0);
@@ -73,11 +71,28 @@ playerBody.addShape(new CANNON.Sphere(0.6));
 world.addBody(playerBody);
 
 // ==========================================
-// 4. CRÉATION DE LA VOITURE
+// 4. CRÉATION DE LA VOITURE (SANS DOUBLON !)
 // ==========================================
-const carMesh = new THREE.Mesh(new THREE.BoxGeometry(2, 0.8, 4), new THREE.MeshStandardMaterial({ color: 0xe63946, roughness: 0.2 }));
+const carMesh = new THREE.Group(); 
 scene.add(carMesh);
 
+// Carrosserie
+const carBodyVisual = new THREE.Mesh(new THREE.BoxGeometry(2, 0.6, 4), new THREE.MeshStandardMaterial({ color: 0xe63946, roughness: 0.2 }));
+carBodyVisual.position.y = 0.3;
+const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 2), new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.1 }));
+cabin.position.set(0, 0.75, -0.2);
+carMesh.add(carBodyVisual, cabin);
+
+// Roues
+const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.4, 16);
+const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+const fLeft = new THREE.Mesh(wheelGeo, wheelMat); fLeft.rotation.z = Math.PI/2; fLeft.position.set(-1.1, 0.2, -1.2);
+const fRight = new THREE.Mesh(wheelGeo, wheelMat); fRight.rotation.z = Math.PI/2; fRight.position.set(1.1, 0.2, -1.2);
+const bLeft = new THREE.Mesh(wheelGeo, wheelMat); bLeft.rotation.z = Math.PI/2; bLeft.position.set(-1.1, 0.2, 1.2);
+const bRight = new THREE.Mesh(wheelGeo, wheelMat); bRight.rotation.z = Math.PI/2; bRight.position.set(1.1, 0.2, 1.2);
+carMesh.add(fLeft, fRight, bLeft, bRight);
+
+// Voiture physique
 const carBody = new CANNON.Body({ mass: 500, position: new CANNON.Vec3(0, 1, -10) });
 carBody.addShape(new CANNON.Box(new CANNON.Vec3(1, 0.4, 2)));
 world.addBody(carBody);
@@ -88,28 +103,23 @@ world.addBody(carBody);
 const buildingColors = [0x4a4e69, 0x9a8c98, 0x3d5a80, 0x293241, 0x6d597a];
 
 for (let i = 0; i < 40; i++) {
-    // Dimensions aléatoires pour chaque immeuble
-    const w = Math.random() * 8 + 6;   // Largeur
-    const h = Math.random() * 30 + 10; // Hauteur
-    const d = Math.random() * 8 + 6;   // Profondeur
+    const w = Math.random() * 8 + 6;
+    const h = Math.random() * 30 + 10;
+    const d = Math.random() * 8 + 6;
 
-    // Position aléatoire (en évitant le centre pour ne pas écraser le joueur au départ)
     let x = (Math.random() - 0.5) * 300;
     let z = (Math.random() - 0.5) * 300;
-    if (Math.abs(x) < 20 && Math.abs(z) < 20) { x += 30; z += 30; } // Zone de sécurité au centre
+    if (Math.abs(x) < 20 && Math.abs(z) < 20) { x += 30; z += 30; }
 
-    // 1. Bâtiment Visuel (Three.js)
+    // Bâtiment Visuel
     const randomColor = buildingColors[Math.floor(Math.random() * buildingColors.length)];
-    const buildMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(w, h, d),
-        new THREE.MeshStandardMaterial({ color: randomColor, roughness: 0.5 })
-    );
-    buildMesh.position.set(x, h / 2, z); // Posé sur le sol
+    const buildMesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: randomColor, roughness: 0.5 }));
+    buildMesh.position.set(x, h / 2, z);
     scene.add(buildMesh);
 
-    // 2. Bâtiment Physique (Cannon.js) pour bloquer les collisions
+    // Bâtiment Physique
     const buildShape = new CANNON.Box(new CANNON.Vec3(w / 2, h / 2, d / 2));
-    const buildBody = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(x, h / 2, z) }); // Masse 0 = statique
+    const buildBody = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(x, h / 2, z) });
     buildBody.addShape(buildShape);
     world.addBody(buildBody);
 }
@@ -166,9 +176,7 @@ function animate() {
     let targetCamX, targetCamY, targetCamZ;
 
     if (!inVehicle) {
-        // --------------------------------------
-        // MODE À PIED
-        // --------------------------------------
+        // À PIED
         const moveSpeed = 6; let moveX = 0; let moveZ = 0;
         if (keys.z) { moveX += Math.sin(cameraAngleX); moveZ += Math.cos(cameraAngleX); }
         if (keys.s) { moveX -= Math.sin(cameraAngleX); moveZ -= Math.cos(cameraAngleX); }
@@ -179,27 +187,23 @@ function animate() {
             playerBody.velocity.x = moveX * moveSpeed; playerBody.velocity.z = moveZ * moveSpeed;
             playerGroup.rotation.y = Math.atan2(moveX, moveZ);
 
-            // ANIMATION DE MARCHE : Fait balancer les bras et jambes avec le temps
-            animationTime += delta * 12; // Vitesse de l'animation
+            animationTime += delta * 12;
             leftLeg.rotation.x = Math.sin(animationTime) * 0.6;
             rightLeg.rotation.x = -Math.sin(animationTime) * 0.6;
             leftArm.rotation.x = -Math.sin(animationTime) * 0.4;
             rightArm.rotation.x = Math.sin(animationTime) * 0.4;
         } else {
             playerBody.velocity.x = 0; playerBody.velocity.z = 0;
-            // Position de repos (debout immobile)
             leftLeg.rotation.x = 0; rightLeg.rotation.x = 0;
             leftArm.rotation.x = 0; rightArm.rotation.x = 0;
         }
 
         playerGroup.position.copy(playerBody.position);
-        playerGroup.position.y -= 0.5; // Ajustement visuel au sol
+        playerGroup.position.y -= 0.5;
         targetCamX = playerBody.position.x; targetCamY = playerBody.position.y + 0.5; targetCamZ = playerBody.position.z;
 
     } else {
-        // --------------------------------------
-        // MODE VOITURE
-        // --------------------------------------
+        // EN VOITURE
         const maxSpeed = 30; const accel = 20; const turnSpeed = 2.5;
         if (keys.z) carSpeed = Math.min(carSpeed + accel * delta, maxSpeed);
         else if (keys.s) carSpeed = Math.max(carSpeed - accel * delta, -maxSpeed * 0.5);
@@ -218,7 +222,7 @@ function animate() {
         targetCamX = carBody.position.x; targetCamY = carBody.position.y + 0.5; targetCamZ = carBody.position.z;
     }
 
-    // Caméra suiveuse
+    // Caméra orbitale
     camera.position.x = targetCamX + cameraRadius * Math.sin(cameraAngleX) * Math.cos(cameraAngleY);
     camera.position.z = targetCamZ + cameraRadius * Math.cos(cameraAngleX) * Math.cos(cameraAngleY);
     camera.position.y = targetCamY + cameraRadius * Math.sin(cameraAngleY) + 0.5;
@@ -232,34 +236,4 @@ animate();
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-});
-// Déclarer le chargeur de fichiers 3D
-const loader = new THREE.GLTFLoader();
-
-// 🚗 CHARGER UNE VRAIE VOITURE MODÉLISÉE
-let carMesh;
-loader.load('assets/voiture.glb', (gltf) => {
-    carMesh = gltf.scene;
-    scene.add(carMesh);
-    
-    // On active les ombres pour faire plus réaliste
-    carMesh.traverse((child) => {
-        if (child.isMesh) child.castShadow = true;
-    });
-});
-
-// 🏢 CHARGER UN IMMEUBLE AVEC INTÉRIEUR
-loader.load('assets/immeuble_ouvert.glb', (gltf) => {
-    const buildingMesh = gltf.scene;
-    buildingMesh.position.set(20, 0, -20);
-    scene.add(buildingMesh);
-
-    // Pour pouvoir ENTRER dedans, la boîte de collision Cannon.js 
-    // ne doit pas être un bloc plein. On utilise les formes complexes du modèle :
-    buildingMesh.traverse((child) => {
-        if (child.isMesh) {
-            // On crée un sol/mur physique précis pour chaque mur du modèle 3D
-            createTrimeshCollision(child); 
-        }
-    });
 });
