@@ -233,3 +233,33 @@ window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+// Déclarer le chargeur de fichiers 3D
+const loader = new THREE.GLTFLoader();
+
+// 🚗 CHARGER UNE VRAIE VOITURE MODÉLISÉE
+let carMesh;
+loader.load('assets/voiture.glb', (gltf) => {
+    carMesh = gltf.scene;
+    scene.add(carMesh);
+    
+    // On active les ombres pour faire plus réaliste
+    carMesh.traverse((child) => {
+        if (child.isMesh) child.castShadow = true;
+    });
+});
+
+// 🏢 CHARGER UN IMMEUBLE AVEC INTÉRIEUR
+loader.load('assets/immeuble_ouvert.glb', (gltf) => {
+    const buildingMesh = gltf.scene;
+    buildingMesh.position.set(20, 0, -20);
+    scene.add(buildingMesh);
+
+    // Pour pouvoir ENTRER dedans, la boîte de collision Cannon.js 
+    // ne doit pas être un bloc plein. On utilise les formes complexes du modèle :
+    buildingMesh.traverse((child) => {
+        if (child.isMesh) {
+            // On crée un sol/mur physique précis pour chaque mur du modèle 3D
+            createTrimeshCollision(child); 
+        }
+    });
+});
