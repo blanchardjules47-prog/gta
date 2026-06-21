@@ -2,40 +2,25 @@
 // 1. INITIALISATION DE THREE.JS (VISUEL)
 // ==========================================
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
+scene.background = new THREE.Color(0x111122); // Ambiance fin de journée / nuit urbaine
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+// Lumières style néon / ville
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
 scene.add(ambientLight);
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-dirLight.position.set(20, 40, 20);
+const dirLight = new THREE.DirectionalLight(0xffeedd, 0.8);
+dirLight.position.set(50, 100, 50);
 scene.add(dirLight);
 
-// Le sol
-const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+// Le sol (Asphalte de la ville)
+const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.8 }));
 floorMesh.rotation.x = -Math.PI / 2;
 scene.add(floorMesh);
-scene.add(new THREE.GridHelper(300, 60, 0x000000, 0xffffff));
-
-// Le personnage visuel
-const playerGroup = new THREE.Group();
-playerGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.2, 1.2, 8), new THREE.MeshStandardMaterial({ color: 0x0000ff })));
-const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), new THREE.MeshStandardMaterial({ color: 0xffdbac }));
-head.position.y = 1.35; playerGroup.add(head);
-const nose = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.3), new THREE.MeshStandardMaterial({ color: 0x333333 }));
-nose.position.set(0, 1.35, 0.25); playerGroup.add(nose);
-scene.add(playerGroup);
-
-// La voiture visuelle (un bloc rouge pour le style)
-const carMesh = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 4), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
-scene.add(carMesh);
-
-// Un texte ou indicateur au-dessus de la voiture
-console.log("Appuie sur F près de la voiture pour monter dedans !");
+scene.add(new THREE.GridHelper(400, 80, 0x444444, 0x222222));
 
 // ==========================================
 // 2. INITIALISATION DE CANNON.JS (PHYSIQUE)
@@ -49,27 +34,93 @@ floorBody.addShape(new CANNON.Plane());
 floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
 world.addBody(floorBody);
 
+// ==========================================
+// 3. CRÉATION DU PERSONNAGE ARTISANAL ANIMÉ
+// ==========================================
+const playerGroup = new THREE.Group();
+
+const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.6 });
+const clothesMat = new THREE.MeshStandardMaterial({ color: 0x3366ff }); // T-shirt bleu
+const pantsMat = new THREE.MeshStandardMaterial({ color: 0x222222 });   // Pantalon noir
+
+// Torse
+const torso = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.3), clothesMat);
+torso.position.y = 0.85;
+playerGroup.add(torso);
+
+// Tête
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), skinMat);
+head.position.y = 1.3;
+playerGroup.add(head);
+
+// Bras Gauche et Droit
+const armGeo = new THREE.BoxGeometry(0.18, 0.6, 0.18);
+const leftArm = new THREE.Mesh(armGeo, clothesMat); leftArm.position.set(-0.4, 0.85, 0);
+const rightArm = new THREE.Mesh(armGeo, clothesMat); rightArm.position.set(0.4, 0.85, 0);
+playerGroup.add(leftArm, rightArm);
+
+// Jambes Gauche et Droite
+const legGeo = new THREE.BoxGeometry(0.2, 0.6, 0.2);
+const leftLeg = new THREE.Mesh(legGeo, pantsMat); leftLeg.position.set(-0.18, 0.3, 0);
+const rightLeg = new THREE.Mesh(legGeo, pantsMat); rightLeg.position.set(0.18, 0.3, 0);
+playerGroup.add(leftLeg, rightLeg);
+
+scene.add(playerGroup);
+
 // Joueur physique
 const playerBody = new CANNON.Body({ mass: 60, position: new CANNON.Vec3(0, 2, 0), fixedRotation: true });
 playerBody.addShape(new CANNON.Sphere(0.6));
 world.addBody(playerBody);
 
-// Voiture physique
-const carBody = new CANNON.Body({ mass: 500, position: new CANNON.Vec3(5, 1, -5) });
-carBody.addShape(new CANNON.Box(new CANNON.Vec3(1, 0.5, 2)));
+// ==========================================
+// 4. CRÉATION DE LA VOITURE
+// ==========================================
+const carMesh = new THREE.Mesh(new THREE.BoxGeometry(2, 0.8, 4), new THREE.MeshStandardMaterial({ color: 0xe63946, roughness: 0.2 }));
+scene.add(carMesh);
+
+const carBody = new CANNON.Body({ mass: 500, position: new CANNON.Vec3(0, 1, -10) });
+carBody.addShape(new CANNON.Box(new CANNON.Vec3(1, 0.4, 2)));
 world.addBody(carBody);
 
 // ==========================================
-// 3. ÉTAT DU JEU (À PIED OU EN VOITURE)
+// 5. GÉNÉRATION DE LA VILLE (BÂTIMENTS)
 // ==========================================
-let inVehicle = false; 
-let carSpeed = 0;
-let carAngle = 0;
+const buildingColors = [0x4a4e69, 0x9a8c98, 0x3d5a80, 0x293241, 0x6d597a];
+
+for (let i = 0; i < 40; i++) {
+    // Dimensions aléatoires pour chaque immeuble
+    const w = Math.random() * 8 + 6;   // Largeur
+    const h = Math.random() * 30 + 10; // Hauteur
+    const d = Math.random() * 8 + 6;   // Profondeur
+
+    // Position aléatoire (en évitant le centre pour ne pas écraser le joueur au départ)
+    let x = (Math.random() - 0.5) * 300;
+    let z = (Math.random() - 0.5) * 300;
+    if (Math.abs(x) < 20 && Math.abs(z) < 20) { x += 30; z += 30; } // Zone de sécurité au centre
+
+    // 1. Bâtiment Visuel (Three.js)
+    const randomColor = buildingColors[Math.floor(Math.random() * buildingColors.length)];
+    const buildMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(w, h, d),
+        new THREE.MeshStandardMaterial({ color: randomColor, roughness: 0.5 })
+    );
+    buildMesh.position.set(x, h / 2, z); // Posé sur le sol
+    scene.add(buildMesh);
+
+    // 2. Bâtiment Physique (Cannon.js) pour bloquer les collisions
+    const buildShape = new CANNON.Box(new CANNON.Vec3(w / 2, h / 2, d / 2));
+    const buildBody = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(x, h / 2, z) }); // Masse 0 = statique
+    buildBody.addShape(buildShape);
+    world.addBody(buildBody);
+}
 
 // ==========================================
-// 4. CAMÉRA ET CONTRÔLES
+// 6. ÉTAT DU JEU, CAMÉRA ET CLAVIER
 // ==========================================
-let cameraAngleX = 0; let cameraAngleY = 0.3; const cameraRadius = 6;
+let inVehicle = false; let carSpeed = 0; let carAngle = 0;
+let cameraAngleX = 0; let cameraAngleY = 0.3; const cameraRadius = 7;
+const keys = { z: false, s: false, q: false, d: false };
+let canJump = false;
 
 document.addEventListener('click', () => { document.body.requestPointerLock(); });
 document.addEventListener('mousemove', (e) => {
@@ -79,47 +130,33 @@ document.addEventListener('mousemove', (e) => {
     }
 });
 
-const keys = { z: false, s: false, q: false, d: false };
-let canJump = false;
-
 window.addEventListener('keydown', (e) => {
-    const key = e.key.toLowerCase();
-    if (key in keys) keys[key] = true;
-    
-    if (e.key === ' ' && canJump && !inVehicle) {
-        playerBody.velocity.y = 6; canJump = false;
-    }
+    const key = e.key.toLowerCase(); if (key in keys) keys[key] = true;
+    if (e.key === ' ' && canJump && !inVehicle) { playerBody.velocity.y = 6; canJump = false; }
 
-    // Touche F : Entrer / Sortir du véhicule
     if (key === 'f') {
         if (!inVehicle) {
-            // Vérifier la distance entre le joueur et la voiture
-            const dist = playerBody.position.distanceTo(carBody.position);
+            const dx = playerBody.position.x - carBody.position.x;
+            const dz = playerBody.position.z - carBody.position.z;
+            const dist = Math.sqrt(dx*dx + dz*dz);
             if (dist < 4) { 
-                inVehicle = true;
-                playerGroup.visible = false; // Cache le personnage
-                // Enlever le corps du joueur de la simulation pour éviter qu'il pousse la voiture
-                world.removeBody(playerBody);
+                inVehicle = true; playerGroup.visible = false; world.removeBody(playerBody);
             }
         } else {
-            // Sortir de la voiture
-            inVehicle = false;
-            playerGroup.visible = true;
-            // Repositionner le joueur à côté de la voiture
+            inVehicle = false; playerGroup.visible = true;
             playerBody.position.set(carBody.position.x + 2, carBody.position.y + 1, carBody.position.z);
-            playerBody.velocity.set(0, 0, 0);
-            world.addBody(playerBody);
+            playerBody.velocity.set(0, 0, 0); world.addBody(playerBody);
         }
     }
 });
 window.addEventListener('keyup', (e) => { const key = e.key.toLowerCase(); if (key in keys) keys[key] = false; });
-
 playerBody.addEventListener("collide", (e) => { if (e.contact.ni.y > 0.5) canJump = true; });
 
 // ==========================================
-// 5. BOUCLE DE JEU (ANIMATE)
+// 7. BOUCLE DE JEU & ANIMATIONS
 // ==========================================
 const clock = new THREE.Clock();
+let animationTime = 0;
 
 function animate() {
     requestAnimationFrame(animate);
@@ -132,7 +169,7 @@ function animate() {
         // --------------------------------------
         // MODE À PIED
         // --------------------------------------
-        const moveSpeed = 7; let moveX = 0; let moveZ = 0;
+        const moveSpeed = 6; let moveX = 0; let moveZ = 0;
         if (keys.z) { moveX += Math.sin(cameraAngleX); moveZ += Math.cos(cameraAngleX); }
         if (keys.s) { moveX -= Math.sin(cameraAngleX); moveZ -= Math.cos(cameraAngleX); }
         if (keys.q) { moveX += Math.sin(cameraAngleX + Math.PI/2); moveZ += Math.cos(cameraAngleX + Math.PI/2); }
@@ -141,55 +178,47 @@ function animate() {
         if (moveX !== 0 || moveZ !== 0) {
             playerBody.velocity.x = moveX * moveSpeed; playerBody.velocity.z = moveZ * moveSpeed;
             playerGroup.rotation.y = Math.atan2(moveX, moveZ);
+
+            // ANIMATION DE MARCHE : Fait balancer les bras et jambes avec le temps
+            animationTime += delta * 12; // Vitesse de l'animation
+            leftLeg.rotation.x = Math.sin(animationTime) * 0.6;
+            rightLeg.rotation.x = -Math.sin(animationTime) * 0.6;
+            leftArm.rotation.x = -Math.sin(animationTime) * 0.4;
+            rightArm.rotation.x = Math.sin(animationTime) * 0.4;
         } else {
             playerBody.velocity.x = 0; playerBody.velocity.z = 0;
+            // Position de repos (debout immobile)
+            leftLeg.rotation.x = 0; rightLeg.rotation.x = 0;
+            leftArm.rotation.x = 0; rightArm.rotation.x = 0;
         }
 
         playerGroup.position.copy(playerBody.position);
-        playerGroup.position.y -= 0.3;
-
-        // Position de la cible caméra (Le joueur)
-        targetCamX = playerBody.position.x;
-        targetCamY = playerBody.position.y + 0.5;
-        targetCamZ = playerBody.position.z;
+        playerGroup.position.y -= 0.5; // Ajustement visuel au sol
+        targetCamX = playerBody.position.x; targetCamY = playerBody.position.y + 0.5; targetCamZ = playerBody.position.z;
 
     } else {
         // --------------------------------------
-        // MODE VOITURE (PHYSIQUE ARCADE SIMPLE)
+        // MODE VOITURE
         // --------------------------------------
-        const maxSpeed = 25;
-        const accel = 15;
-        const turnSpeed = 2.2;
-
-        // Avancer / Reculer
+        const maxSpeed = 30; const accel = 20; const turnSpeed = 2.5;
         if (keys.z) carSpeed = Math.min(carSpeed + accel * delta, maxSpeed);
         else if (keys.s) carSpeed = Math.max(carSpeed - accel * delta, -maxSpeed * 0.5);
-        else carSpeed *= 0.98; // Friction naturelle (freinage)
+        else carSpeed *= 0.96;
 
-        // Tourner
         if (keys.q) carAngle += turnSpeed * delta * (carSpeed / maxSpeed);
         if (keys.d) carAngle -= turnSpeed * delta * (carSpeed / maxSpeed);
 
-        // Appliquer la rotation et la vitesse au corps physique de la voiture
         carBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), carAngle);
-        
-        // Calculer le vecteur direction avant de la voiture
-        const forwardX = Math.sin(carAngle);
-        const forwardZ = Math.cos(carAngle);
-        carBody.velocity.x = forwardX * carSpeed;
-        carBody.velocity.z = forwardZ * carSpeed;
+        carBody.velocity.x = Math.sin(carAngle) * carSpeed;
+        carBody.velocity.z = Math.cos(carAngle) * carSpeed;
 
-        // Synchroniser le visuel
         carMesh.position.copy(carBody.position);
         carMesh.quaternion.copy(carBody.quaternion);
 
-        // Position de la cible caméra (La voiture)
-        targetCamX = carBody.position.x;
-        targetCamY = carBody.position.y + 0.5;
-        targetCamZ = carBody.position.z;
+        targetCamX = carBody.position.x; targetCamY = carBody.position.y + 0.5; targetCamZ = carBody.position.z;
     }
 
-    // Gestion commune de la caméra orbitale
+    // Caméra suiveuse
     camera.position.x = targetCamX + cameraRadius * Math.sin(cameraAngleX) * Math.cos(cameraAngleY);
     camera.position.z = targetCamZ + cameraRadius * Math.cos(cameraAngleX) * Math.cos(cameraAngleY);
     camera.position.y = targetCamY + cameraRadius * Math.sin(cameraAngleY) + 0.5;
