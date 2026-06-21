@@ -1,70 +1,123 @@
-// 1. Initialisation de la Scène, de la Caméra et du Moteur de Rendu
+
+// 1. Initialisation de la Scène, de la Caméra et du Rendu
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb); // Un ciel bleu
+scene.background = new THREE.Color(0x87ceeb); // Ciel bleu
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// 2. Ajout de la Lumière (comme le soleil)
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(5, 10, 7).normalize();
-scene.add(light);
+// 2. Lumières
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
 
-// 3. Création du Sol (la ville)
-const floorGeometry = new THREE.PlaneGeometry(100, 100);
-const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x555555, side: THREE.DoubleSide });
-const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-floor.rotation.x = Math.PI / 2; // On l'allonge à plat
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(20, 40, 20);
+scene.add(dirLight);
+
+// 3. Le Sol
+const floorGeo = new THREE.PlaneGeometry(200, 200);
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x333333 }); // Sol asphalte
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
 
-// 4. Création du Joueur (un cube temporaire)
-const playerGeometry = new THREE.BoxGeometry(1, 2, 1); // Dimensions proches d'un humain
-const playerMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-const player = new THREE.Mesh(playerGeometry, playerMaterial);
-player.position.y = 1; // On le place juste au-dessus du sol
-scene.add(player);
+// Ajouter des lignes sur le sol pour mieux voir le mouvement
+const grid = new THREE.GridHelper(200, 50, 0x000000, 0xffffff);
+grid.position.y = 0.01;
+scene.add(grid);
 
-// Position initiale de la caméra (derrière le joueur)
-camera.position.set(0, 5, 10);
-camera.lookAt(player.position);
+// 4. Création du Personnage (Option B : Un personnage assemblé)
+const playerGroup = new THREE.Group(); // Conteneur pour tout le corps
 
-// 5. Gestion des mouvements du joueur
+// Le tronc
+const bodyGeo = new THREE.CylinderGeometry(0.4, 0.2, 1.2, 8);
+const bodyMat = new THREE.MeshStandardMaterial({ color: 0x0000ff }); // T-shirt bleu
+const body = new THREE.Mesh(bodyGeo, bodyMat);
+body.position.y = 0.6;
+playerGroup.add(body);
+
+// La tête
+const headGeo = new THREE.SphereGeometry(0.25, 16, 16);
+const headMat = new THREE.MeshStandardMaterial({ color: 0xffdbac }); // Peau
+const head = new THREE.Mesh(headGeo, headMat);
+head.position.y = 1.35;
+playerGroup.add(head);
+
+// Un "nez" ou une visière pour savoir où regarde le personnage
+const noseGeo = new THREE.BoxGeometry(0.1, 0.1, 0.3);
+const noseMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+const nose = new THREE.Mesh(noseGeo, noseMat);
+nose.position.set(0, 1.35, 0.25);
+playerGroup.add(nose);
+
+scene.add(playerGroup);
+
+// 5. Gestion de la Caméra Orbitale à la souris (Option A)
+let cameraAngleX = 0; // Rotation gauche/droite
+let cameraAngleY = 0.3; // Rotation haut/bas
+const cameraRadius = 5; // Distance derrière le joueur
+
+// Capturer les mouvements de la souris quand on clique sur l'écran
+document.addEventListener('click', () => {
+    document.body.requestPointerLock(); // Bloque la souris au centre comme dans GTA
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (document.pointerLockElement === document.body) {
+        cameraAngleX -= e.movementX * 0.003;
+        cameraAngleY -= e.movementY * 0.003;
+
+        // Limiter la caméra pour ne pas qu'elle passe sous le sol ou se retourne
+        cameraAngleY = Math.max(0.05, Math.min(Math.PI / 2.5, cameraAngleY));
+    }
+});
+
+// 6. Contrôles Clavier
 const keys = { z: false, s: false, q: false, d: false };
+window.addEventListener('keydown', (e) => { if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = true; });
+window.addEventListener('keyup', (e) => { if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = false; });
 
-window.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = true;
-});
+// 7. Boucle principale du jeu
+const clock = new THREE.Clock();
 
-window.addEventListener('keyup', (e) => {
-    if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = false;
-});
-
-// 6. Boucle d'animation (Le jeu tourne ici en continu)
 function animate() {
     requestAnimationFrame(animate);
+    const delta = clock.getDelta();
+    const moveSpeed = 5 * delta;
 
-    // Déplacement du joueur selon les touches enfoncées
-    const speed = 0.1;
-    if (keys.z) player.position.z -= speed; // Avancer
-    if (keys.s) player.position.z += speed; // Reculer
-    if (keys.q) player.position.x -= speed; // Gauche
-    if (keys.d) player.position.x += speed; // Droite
+    // Déplacement relatif à l'orientation de la caméra
+    let moveX = 0;
+    let moveZ = 0;
 
-    // Faire suivre la caméra derrière le joueur
-    camera.position.x = player.position.x;
-    camera.position.z = player.position.z + 10;
-    camera.position.y = player.position.y + 4;
-    camera.lookAt(player.position);
+    if (keys.z) { moveX += Math.sin(cameraAngleX); moveZ += Math.cos(cameraAngleX); }
+    if (keys.s) { moveX -= Math.sin(cameraAngleX); moveZ -= Math.cos(cameraAngleX); }
+    if (keys.q) { moveX += Math.sin(cameraAngleX + Math.PI/2); moveZ += Math.cos(cameraAngleX + Math.PI/2); }
+    if (keys.d) { moveX -= Math.sin(cameraAngleX + Math.PI/2); moveZ -= Math.cos(cameraAngleX + Math.PI/2); }
+
+    // Si le joueur bouge, on applique le mouvement et on l'oriente
+    if (moveX !== 0 || moveZ !== 0) {
+        playerGroup.position.x += moveX * moveSpeed;
+        playerGroup.position.z += moveZ * moveSpeed;
+        
+        // Aligner le regard du personnage avec sa direction de marche
+        playerGroup.rotation.y = Math.atan2(moveX, moveZ);
+    }
+
+    // Mise à jour de la position de la caméra autour du joueur
+    camera.position.x = playerGroup.position.x + cameraRadius * Math.sin(cameraAngleX) * Math.cos(cameraAngleY);
+    camera.position.z = playerGroup.position.z + cameraRadius * Math.cos(cameraAngleX) * Math.cos(cameraAngleY);
+    camera.position.y = playerGroup.position.y + cameraRadius * Math.sin(cameraAngleY) + 1; // Légèrement surélevée
+    
+    // La caméra regarde le personnage
+    camera.lookAt(playerGroup.position.x, playerGroup.position.y + 1, playerGroup.position.z);
 
     renderer.render(scene, camera);
 }
 
-// Lancement du jeu
 animate();
 
-// Ajuster la taille de la fenêtre si l'utilisateur redimensionne l'écran
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
